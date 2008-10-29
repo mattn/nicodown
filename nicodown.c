@@ -6,8 +6,8 @@
 
 
 typedef struct {
-	char* data;		// response data from server.
-	size_t size;	// response size of data.
+	char* data;		// response data from server
+	size_t size;	// response size of data
 } MEMFILE;
 
 MEMFILE*
@@ -67,8 +67,8 @@ main(int argc, char* argv[]) {
 	char* ptr = NULL;
 	char* tmp = NULL;
 	FILE* fp = NULL;
-	MEMFILE* mf; // mem file.
-	MEMFILE* hf; // mem file for header.
+	MEMFILE* mf; // mem file
+	MEMFILE* hf; // mem file for header
 
 	// usage
 	if (argc != 4) {
@@ -83,7 +83,7 @@ main(int argc, char* argv[]) {
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &error);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
-	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+	//curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 
 	// login
 	sprintf(query, "mail=%s&password=%s&next_url=/watch/%s", argv[1], argv[2], argv[3]);
@@ -143,7 +143,7 @@ main(int argc, char* argv[]) {
 	}
 	free(buf);
 
-	// parse response body.
+	// parse response body
 	buf = memfstrdup(mf);
 	if (strstr(buf, "id=\"login_bar\"")) {
 		free(buf);
@@ -243,6 +243,15 @@ main(int argc, char* argv[]) {
 	printf("URL: %s\n", query);
 	free(buf);
 	memfclose(mf);
+
+#ifdef _WIN32
+	// sanitize filename
+	ptr = fname;
+	while (*ptr) {
+		if (strchr("\\/|:<>\"?*", *ptr)) *ptr = '_';
+		ptr++;
+	}
+#endif
 
 	// download video
 	fp = fopen(fname, "wb");
