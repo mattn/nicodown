@@ -6,8 +6,8 @@
 
 
 typedef struct {
-	char* data;		/* response data from server. */
-	size_t size;	/* response size of data. */
+	char* data;		// response data from server.
+	size_t size;	// response size of data.
 } MEMFILE;
 
 MEMFILE*
@@ -58,15 +58,17 @@ int
 main(int argc, char* argv[]) {
 	CURLcode res;
 	CURL* curl;
+	int status = 0;
 	char error[256];
-	char name[256];
-	char data[1024];
+	char fname[256];
+	char cookie[256];
+	char query[2048];
 	char* buf = NULL;
 	char* ptr = NULL;
 	char* tmp = NULL;
 	FILE* fp = NULL;
-	int status = 0;
-	MEMFILE* mf;
+	MEMFILE* mf; // mem file.
+	MEMFILE* hf; // mem file for header.
 
 	// usage
 	if (argc != 4) {
@@ -75,43 +77,92 @@ main(int argc, char* argv[]) {
 	}
 
 	// default filename
-	sprintf(name, "%s.flv", argv[3]);
+	sprintf(fname, "%s.flv", argv[3]);
 
 	curl = curl_easy_init();
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &error);
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
-	curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "cookies.jar");
-	curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "cookies.txt");
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 
 	// login
-	sprintf(data, "mail=%s&password=%s&next_url=/watch/%s", argv[1], argv[2], argv[3]);
+	sprintf(query, "mail=%s&password=%s&next_url=/watch/%s", argv[1], argv[2], argv[3]);
 	mf = memfopen();
+	hf = memfopen();
 	curl_easy_setopt(curl, CURLOPT_URL, "https://secure.nicovideo.jp/secure/login?site=niconico");
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, query);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
+	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, memfwrite);
+	curl_easy_setopt(curl, CURLOPT_HEADERDATA, hf);
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, error);
 		memfclose(mf);
+		memfclose(hf);
 		goto leave;
 	}
+
+	// parse cookie
+	memset(cookie, 0, sizeof(cookie));
+	buf = memfstrdup(hf);
+	tmp = buf;
+	while (tmp = strstr(tmp, "Set-Cookie: "))
+		ptr = tmp++;
+	if (ptr) {
+		tmp = strpbrk(ptr, "\r\n;");
+		if (tmp) *tmp = 0;
+		strcpy(cookie, ptr + 12);
+		curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
+	}
+	free(buf);
+
+	// redirect
+	sprintf(query, "http://www.nicovideo.jp/watch/%s", argv[3]);
+	curl_easy_setopt(curl, CURLOPT_URL, query);
+	curl_easy_setopt(curl, CURLOPT_POST, 0);
+	res = curl_easy_perform(curl);
+	if (res != CURLE_OK) {
+		fprintf(stderr, error);
+		memfclose(mf);
+		memfclose(hf);
+		goto leave;
+	}
+
+	// parse cookie
+	buf = memfstrdup(hf);
+	tmp = buf;
+	while (tmp = strstr(tmp, "Set-Cookie: "))
+		ptr = tmp++;
+	if (ptr) {
+		tmp = strpbrk(ptr, "\r\n;");
+		if (tmp) *tmp = 0;
+		strcat(cookie, "; ");
+		strcat(cookie, ptr + 12);
+		curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
+	}
+	free(buf);
+
+	// parse response body.
 	buf = memfstrdup(mf);
 	if (strstr(buf, "id=\"login_bar\"")) {
-		printf("%s\n", buf);
 		free(buf);
 		fprintf(stderr, "failed to login\n");
+		memfclose(mf);
+		memfclose(hf);
 		goto leave;
 	}
 	free(buf);
+	memfclose(hf);
 	memfclose(mf);
 
-	// get video url, and get filename
-	sprintf(data, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", argv[3]);
+	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, NULL);
+	curl_easy_setopt(curl, CURLOPT_HEADERDATA, NULL);
+
+	// get video query, and get filename
+	sprintf(query, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", argv[3]);
 	mf = memfopen();
-	curl_easy_setopt(curl, CURLOPT_URL, data);
+	curl_easy_setopt(curl, CURLOPT_URL, query);
 	curl_easy_setopt(curl, CURLOPT_POST, 0);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
 	res = curl_easy_perform(curl);
@@ -127,7 +178,7 @@ main(int argc, char* argv[]) {
 		tmp = strstr(ptr, "</title>");
 		if (*tmp) {
 			*tmp = 0;
-			strcpy(name, ptr);
+			strcpy(fname, ptr);
 		}
 #ifdef _WIN32
 		{
@@ -138,7 +189,7 @@ main(int argc, char* argv[]) {
 			char* mbsstr;
 
 			codePage = CP_UTF8;
-			wcssize = MultiByteToWideChar(codePage, 0, name, -1,  NULL, 0);
+			wcssize = MultiByteToWideChar(codePage, 0, fname, -1,  NULL, 0);
 			wcsstr = (wchar_t*)malloc(sizeof(wchar_t) * (wcssize + 1));
 			wcssize = MultiByteToWideChar(codePage, 0, ptr, -1, wcsstr, wcssize + 1);
 			wcsstr[wcssize] = 0;
@@ -147,7 +198,7 @@ main(int argc, char* argv[]) {
 			mbsstr = (char*)malloc(mbssize+1);
 			mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)wcsstr, -1, mbsstr, mbssize, NULL, NULL);
 			mbsstr[mbssize] = 0;
-			sprintf(name, "%s.flv", mbsstr);
+			sprintf(fname, "%s.flv", mbsstr);
 			free(mbsstr);
 			free(wcsstr);
 		}
@@ -156,10 +207,10 @@ main(int argc, char* argv[]) {
 	if (buf) free(buf);
 	memfclose(mf);
 
-	// get video url
-	sprintf(data, "http://www.nicovideo.jp/api/getflv?v=%s", argv[3]);
+	// get video query
+	sprintf(query, "http://www.nicovideo.jp/api/getflv?v=%s", argv[3]);
 	mf = memfopen();
-	curl_easy_setopt(curl, CURLOPT_URL, data);
+	curl_easy_setopt(curl, CURLOPT_URL, query);
 	curl_easy_setopt(curl, CURLOPT_POST, 0);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
 	res = curl_easy_perform(curl);
@@ -188,24 +239,25 @@ main(int argc, char* argv[]) {
 		}
 		tmp++;
 	}
-	strcpy(data, ptr + 4);
-	printf("URL: %s\n", data);
+	strcpy(query, ptr + 4);
+	printf("URL: %s\n", query);
 	free(buf);
 	memfclose(mf);
 
 	// download video
-	fp = fopen(name, "wb");
+	fp = fopen(fname, "wb");
 	if (!fp) {
 		fprintf(stderr, "failed to open file\n");
 		goto leave;
 	}
-	curl_easy_setopt(curl, CURLOPT_URL, data);
+	curl_easy_setopt(curl, CURLOPT_URL, query);
 	curl_easy_setopt(curl, CURLOPT_POST, 0);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
 	curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress);
-	curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, name);
+	curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, fname);
+	curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
 	res = curl_easy_perform(curl);
 	fclose(fp);
 	if (res != CURLE_OK) {
