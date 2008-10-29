@@ -4,31 +4,47 @@
 #define HEX_DIGITS "0123456789ABCDEF"
 #define IS_QUOTED(x) (*x == '%' && strchr(HEX_DIGITS, *(x+1)) && strchr(HEX_DIGITS, *(x+2)))
 
-static char* response_data = NULL;	/* response data from server. */
-static size_t response_size = 0;	/* response size of data */
 
-static void
-curl_handle_init() {
-	response_data = NULL;
-	response_size = 0;
+typedef struct {
+	char* data;		/* response data from server. */
+	size_t size;	/* response size of data */
+} MEMFILE;
+
+MEMFILE*
+memfopen() {
+	MEMFILE* mf = (MEMFILE*) malloc(sizeof(MEMFILE));
+	mf->data = NULL;
+	mf->size = 0;
+	return mf;
 }
 
-static void
-curl_handle_term() {
-	if (response_data) free(response_data);
+void
+memfclose(MEMFILE* mf) {
+	if (mf->data) free(mf->data);
+	free(mf);
 }
 
-static size_t
-curl_handle_returned_data(char* ptr, size_t size, size_t nmemb, void* stream) {
-	if (!response_data)
-		response_data = (char*)malloc(size*nmemb);
+size_t
+memfwrite(char* ptr, size_t size, size_t nmemb, void* stream) {
+	MEMFILE* mf = (MEMFILE*) stream;
+	int block = size * nmemb;
+	if (!mf->data)
+		mf->data = (char*)malloc(block);
 	else
-		response_data = (char*)realloc(response_data, response_size+size*nmemb);
-	if (response_data) {
-		memcpy(response_data+response_size, ptr, size*nmemb);
-		response_size += size*nmemb;
+		mf->data = (char*)realloc(mf->data, mf->size + block);
+	if (mf->data) {
+		memcpy(mf->data + mf->size, ptr, block);
+		mf->size += block;
 	}
-	return size*nmemb;
+	return block;
+}
+
+char*
+memfstrdup(MEMFILE* mf) {
+	char* buf = malloc(mf->size + 1);
+	memcpy(buf, mf->data, mf->size);
+	buf[mf->size + 1] = 0;
+	return buf;
 }
 
 int
@@ -43,6 +59,7 @@ main(int argc, char* argv[]) {
 	char* tmp = NULL;
 	FILE* fp = NULL;
 	int status = 0;
+	MEMFILE* mf;
 
 	// usage
 	if (argc != 4) {
@@ -57,23 +74,24 @@ main(int argc, char* argv[]) {
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &error);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_handle_returned_data);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
 	curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "cookies.jar");
 	curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "cookies.txt");
 
 	// login
 	sprintf(data, "mail=%s&password=%s&next_url=/watch/%s", argv[1], argv[2], argv[3]);
-	curl_handle_init();
+	mf = memfopen();
 	curl_easy_setopt(curl, CURLOPT_URL, "https://secure.nicovideo.jp/secure/login?site=niconico");
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, error);
+		memfclose(mf);
 		goto leave;
 	}
-	buf = malloc(response_size + 1);
-	strcpy(buf, response_data);
+	buf = memfstrdup(mf);
 	if (strstr(buf, "id=\"login_bar\"")) {
 		printf("%s\n", buf);
 		free(buf);
@@ -81,21 +99,22 @@ main(int argc, char* argv[]) {
 		goto leave;
 	}
 	free(buf);
-	curl_handle_term();
+	memfclose(mf);
 
 	// get video url, and get filename
 	sprintf(data, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", argv[3]);
-	curl_handle_init();
+	mf = memfopen();
 	curl_easy_setopt(curl, CURLOPT_URL, data);
 	curl_easy_setopt(curl, CURLOPT_POST, 0);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, error);
+		memfclose(mf);
 		goto leave;
 	}
-	buf = malloc(response_size + 1);
-	strcpy(buf, response_data);
-	ptr = strstr(buf, "<title>");
+	buf = memfstrdup(mf);
+	ptr = buf ? strstr(buf, "<title>") : NULL;
 	if (ptr) {
 		ptr += 7;
 		tmp = strstr(ptr, "</title>");
@@ -127,26 +146,28 @@ main(int argc, char* argv[]) {
 		}
 #endif
 	}
-	free(buf);
+	if (buf) free(buf);
 	printf("downloading %s\n", name);
-	curl_handle_term();
+	memfclose(mf);
 
 	// get video url
 	sprintf(data, "http://www.nicovideo.jp/api/getflv?v=%s", argv[3]);
-	curl_handle_init();
+	mf = memfopen();
 	curl_easy_setopt(curl, CURLOPT_URL, data);
 	curl_easy_setopt(curl, CURLOPT_POST, 0);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, error);
+		memfclose(mf);
 		goto leave;
 	}
-	buf = malloc(response_size + 1);
-	strcpy(buf, response_data);
-	ptr = strstr(response_data, "url=");
+	buf = memfstrdup(mf);
+	ptr = buf ? strstr(buf, "url=") : NULL;
 	if (!ptr) {
-		free(buf);
+		if (buf) free(buf);
 		fprintf(stderr, "failed to get video info\n");
+		memfclose(mf);
 		goto leave;
 	}
 	tmp = strstr(ptr, "&");
@@ -164,7 +185,7 @@ main(int argc, char* argv[]) {
 	strcpy(data, ptr + 4);
 	printf("URL: %s\n", data);
 	free(buf);
-	curl_handle_term();
+	memfclose(mf);
 
 	// download video
 	fp = fopen(name, "wb");
@@ -172,7 +193,6 @@ main(int argc, char* argv[]) {
 		fprintf(stderr, "failed to open file\n");
 		goto leave;
 	}
-	curl_handle_init();
 	curl_easy_setopt(curl, CURLOPT_URL, data);
 	curl_easy_setopt(curl, CURLOPT_POST, 0);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
@@ -185,7 +205,6 @@ main(int argc, char* argv[]) {
 	}
 
 leave:
-	curl_handle_term();
 	curl_easy_cleanup(curl);
 
 	return 0;
