@@ -1,0 +1,17 @@
+nicodown : ニコニコ動画ダウンローダ
+
+What?
+	niconico movie downloader writen by C.
+
+Usage
+ # nicodown [usermail] [password] [video_id]
+
+Build
+	You can build it with gcc.
+
+License
+	Public Domain
+
+Author
+	mattn
+
