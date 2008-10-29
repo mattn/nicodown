@@ -1,3 +1,9 @@
-*.dll 
+# ignore files
 *.exe
+test.bat
 cookies.jar
+libcurl.dll
+libeay32.dll
+libssh2.dll
+libssl32.dll
+zlib1.dll
