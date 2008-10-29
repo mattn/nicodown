@@ -7,3 +7,4 @@ libeay32.dll
 libssh2.dll
 libssl32.dll
 zlib1.dll
+*.flv

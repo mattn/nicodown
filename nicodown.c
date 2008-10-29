@@ -7,7 +7,7 @@
 
 typedef struct {
 	char* data;		/* response data from server. */
-	size_t size;	/* response size of data */
+	size_t size;	/* response size of data. */
 } MEMFILE;
 
 MEMFILE*
@@ -45,6 +45,13 @@ memfstrdup(MEMFILE* mf) {
 	memcpy(buf, mf->data, mf->size);
 	buf[mf->size + 1] = 0;
 	return buf;
+}
+
+int
+progress(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow) {
+	printf("\r[%s] %3.1f%%   ", (char*) clientp, dlnow * 100.0 / dltotal);
+	fflush(stdout);
+	return 0;
 }
 
 int
@@ -147,7 +154,6 @@ main(int argc, char* argv[]) {
 #endif
 	}
 	if (buf) free(buf);
-	printf("downloading %s\n", name);
 	memfclose(mf);
 
 	// get video url
@@ -197,6 +203,9 @@ main(int argc, char* argv[]) {
 	curl_easy_setopt(curl, CURLOPT_POST, 0);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
+	curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress);
+	curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, name);
 	res = curl_easy_perform(curl);
 	fclose(fp);
 	if (res != CURLE_OK) {
