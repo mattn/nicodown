@@ -1,5 +1,10 @@
 //#define CURL_STATICLIB
 #include <curl/curl.h>
+#if 0
+#include <libxml/parser.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
+#endif
 
 #define HEX_DIGITS "0123456789ABCDEF"
 #define IS_QUOTED(x) (*x == '%' && strchr(HEX_DIGITS, *(x+1)) && strchr(HEX_DIGITS, *(x+2)))
@@ -92,8 +97,8 @@ main(int argc, char* argv[]) {
 	curl_easy_setopt(curl, CURLOPT_URL, "https://secure.nicovideo.jp/secure/login?site=niconico");
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, query);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, memfwrite);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
 	curl_easy_setopt(curl, CURLOPT_HEADERDATA, hf);
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
@@ -117,6 +122,13 @@ main(int argc, char* argv[]) {
 	}
 	free(buf);
 
+	memfclose(mf);
+	memfclose(hf);
+	mf = memfopen();
+	hf = memfopen();
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
+	curl_easy_setopt(curl, CURLOPT_HEADERDATA, hf);
+
 	// redirect
 	sprintf(query, "http://www.nicovideo.jp/watch/%s", argv[3]);
 	curl_easy_setopt(curl, CURLOPT_URL, query);
@@ -131,6 +143,7 @@ main(int argc, char* argv[]) {
 
 	// parse cookie
 	buf = memfstrdup(hf);
+	ptr = NULL;
 	tmp = buf;
 	while (tmp = strstr(tmp, "Set-Cookie: "))
 		ptr = tmp++;
@@ -145,7 +158,7 @@ main(int argc, char* argv[]) {
 
 	// parse response body
 	buf = memfstrdup(mf);
-	if (strstr(buf, "id=\"login_bar\"")) {
+	if (buf && strstr(buf, "id=\"login_bar\"")) {
 		free(buf);
 		fprintf(stderr, "failed to login\n");
 		memfclose(mf);
@@ -171,6 +184,36 @@ main(int argc, char* argv[]) {
 		memfclose(mf);
 		goto leave;
 	}
+
+#ifdef LIBXML_VERSION
+	// parse title node
+	{
+		xmlDocPtr doc = NULL;
+		xmlXPathContextPtr xpathctx;
+		xmlXPathObjectPtr xpathobj;
+
+		doc = xmlParseMemory(mf->data, mf->size);
+		xpathctx = doc ? xmlXPathNewContext(doc) : NULL;
+		xpathobj = xpathctx ? xmlXPathEvalExpression((xmlChar*) "//title", xpathctx) : NULL;
+		if (xpathobj) {
+			int n;
+			xmlNodeSetPtr nodes = xpathobj->nodesetval;
+			for(n = 0; nodes && n < xmlXPathNodeSetGetLength(nodes); n++) {
+				xmlNodePtr node = nodes->nodeTab[n];
+				if(node->type != XML_ATTRIBUTE_NODE && node->type != XML_ELEMENT_NODE && node->type != XML_CDATA_SECTION_NODE) continue;
+				if (node->type == XML_CDATA_SECTION_NODE)
+					sprintf(fname, "%s.flv", (char*)node->content);
+				else
+				if (node->children)
+					sprintf(fname, "%s.flv", (char*)node->children->content);
+				break;
+			}
+		}
+		if (xpathobj ) xmlXPathFreeObject(xpathobj);
+		if (xpathctx) xmlXPathFreeContext(xpathctx);
+		if (doc) xmlFreeDoc(doc);
+	}
+#else
 	buf = memfstrdup(mf);
 	ptr = buf ? strstr(buf, "<title>") : NULL;
 	if (ptr) {
@@ -178,34 +221,37 @@ main(int argc, char* argv[]) {
 		tmp = strstr(ptr, "</title>");
 		if (*tmp) {
 			*tmp = 0;
-			strcpy(fname, ptr);
+			sprintf(fname, "%s.flv", ptr);
 		}
-#ifdef _WIN32
-		{
-			UINT codePage;
-			size_t wcssize;
-			wchar_t* wcsstr;
-			size_t mbssize;
-			char* mbsstr;
-
-			codePage = CP_UTF8;
-			wcssize = MultiByteToWideChar(codePage, 0, fname, -1,  NULL, 0);
-			wcsstr = (wchar_t*)malloc(sizeof(wchar_t) * (wcssize + 1));
-			wcssize = MultiByteToWideChar(codePage, 0, ptr, -1, wcsstr, wcssize + 1);
-			wcsstr[wcssize] = 0;
-			codePage = GetACP();
-			mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)wcsstr,-1,NULL,0,NULL,NULL);
-			mbsstr = (char*)malloc(mbssize+1);
-			mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)wcsstr, -1, mbsstr, mbssize, NULL, NULL);
-			mbsstr[mbssize] = 0;
-			sprintf(fname, "%s.flv", mbsstr);
-			free(mbsstr);
-			free(wcsstr);
-		}
-#endif
 	}
 	if (buf) free(buf);
+#endif
+
 	memfclose(mf);
+
+#ifdef _WIN32
+	{
+		UINT codePage;
+		size_t wcssize;
+		wchar_t* wcsstr;
+		size_t mbssize;
+		char* mbsstr;
+
+		codePage = CP_UTF8;
+		wcssize = MultiByteToWideChar(codePage, 0, fname, -1,  NULL, 0);
+		wcsstr = (wchar_t*)malloc(sizeof(wchar_t) * (wcssize + 1));
+		wcssize = MultiByteToWideChar(codePage, 0, fname, -1, wcsstr, wcssize + 1);
+		wcsstr[wcssize] = 0;
+		codePage = GetACP();
+		mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)wcsstr,-1,NULL,0,NULL,NULL);
+		mbsstr = (char*)malloc(mbssize+1);
+		mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)wcsstr, -1, mbsstr, mbssize, NULL, NULL);
+		mbsstr[mbssize] = 0;
+		strcpy(fname, mbsstr);
+		free(mbsstr);
+		free(wcsstr);
+	}
+#endif
 
 	// get video query
 	sprintf(query, "http://www.nicovideo.jp/api/getflv?v=%s", argv[3]);
@@ -220,7 +266,7 @@ main(int argc, char* argv[]) {
 		goto leave;
 	}
 	buf = memfstrdup(mf);
-	ptr = buf ? strstr(buf, "url=") : NULL;
+	ptr = strstr(buf, "url=");
 	if (!ptr) {
 		if (buf) free(buf);
 		fprintf(stderr, "failed to get video info\n");
@@ -266,7 +312,6 @@ main(int argc, char* argv[]) {
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
 	curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress);
 	curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, fname);
-	curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
 	res = curl_easy_perform(curl);
 	fclose(fp);
 	if (res != CURLE_OK) {
