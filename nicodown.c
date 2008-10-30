@@ -1,6 +1,6 @@
 //#define CURL_STATICLIB
 #include <curl/curl.h>
-#if 0
+#ifdef USE_LIBXML
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
@@ -11,7 +11,7 @@
 
 
 typedef struct {
-    char* data;        // response data from server
+    char* data;     // response data from server
     size_t size;    // response size of data
 } MEMFILE;
 
@@ -34,9 +34,9 @@ memfwrite(char* ptr, size_t size, size_t nmemb, void* stream) {
     MEMFILE* mf = (MEMFILE*) stream;
     int block = size * nmemb;
     if (!mf->data)
-        mf->data = (char*)malloc(block);
+        mf->data = (char*) malloc(block);
     else
-        mf->data = (char*)realloc(mf->data, mf->size + block);
+        mf->data = (char*) realloc(mf->data, mf->size + block);
     if (mf->data) {
         memcpy(mf->data + mf->size, ptr, block);
         mf->size += block;
@@ -48,21 +48,21 @@ char*
 memfstrdup(MEMFILE* mf) {
     char* buf = malloc(mf->size + 1);
     memcpy(buf, mf->data, mf->size);
-    buf[mf->size + 1] = 0;
+    buf[mf->size] = 0;
     return buf;
 }
 
 int
 progress(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow) {
-    printf("\r[%s] %3.1f%%   ", (char*) clientp, dlnow * 100.0 / dltotal);
+    printf("\r[%s] %.1f%%   ", (char*) clientp, dlnow * 100.0 / dltotal);
     fflush(stdout);
     return 0;
 }
 
 int
 main(int argc, char* argv[]) {
+    CURL* curl = NULL;
     CURLcode res;
-    CURL* curl;
     int status = 0;
     char error[256];
     char fname[256];
@@ -185,7 +185,7 @@ main(int argc, char* argv[]) {
         goto leave;
     }
 
-#ifdef LIBXML_VERSION
+#ifdef USE_LIBXML
     // parse title node
     {
         xmlDocPtr doc = NULL;
@@ -202,10 +202,10 @@ main(int argc, char* argv[]) {
                 xmlNodePtr node = nodes->nodeTab[n];
                 if(node->type != XML_ATTRIBUTE_NODE && node->type != XML_ELEMENT_NODE && node->type != XML_CDATA_SECTION_NODE) continue;
                 if (node->type == XML_CDATA_SECTION_NODE)
-                    sprintf(fname, "%s.flv", (char*)node->content);
+                    sprintf(fname, "%s.flv", (char*) node->content);
                 else
                 if (node->children)
-                    sprintf(fname, "%s.flv", (char*)node->children->content);
+                    sprintf(fname, "%s.flv", (char*) node->children->content);
                 break;
             }
         }
@@ -239,13 +239,13 @@ main(int argc, char* argv[]) {
 
         codePage = CP_UTF8;
         wcssize = MultiByteToWideChar(codePage, 0, fname, -1,  NULL, 0);
-        wcsstr = (wchar_t*)malloc(sizeof(wchar_t) * (wcssize + 1));
+        wcsstr = (wchar_t*) malloc(sizeof(wchar_t) * (wcssize + 1));
         wcssize = MultiByteToWideChar(codePage, 0, fname, -1, wcsstr, wcssize + 1);
         wcsstr[wcssize] = 0;
         codePage = GetACP();
-        mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)wcsstr,-1,NULL,0,NULL,NULL);
-        mbsstr = (char*)malloc(mbssize+1);
-        mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)wcsstr, -1, mbsstr, mbssize, NULL, NULL);
+        mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR) wcsstr,-1,NULL,0,NULL,NULL);
+        mbsstr = (char*) malloc(mbssize+1);
+        mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR) wcsstr, -1, mbsstr, mbssize, NULL, NULL);
         mbsstr[mbssize] = 0;
         strcpy(fname, mbsstr);
         free(mbsstr);
@@ -320,7 +320,7 @@ main(int argc, char* argv[]) {
     }
 
 leave:
-    curl_easy_cleanup(curl);
+    if (curl) curl_easy_cleanup(curl);
 
     return 0;
 }
