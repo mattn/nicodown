@@ -1,7 +1,7 @@
 nicodown : ニコニコ動画ダウンローダ
 
 What?
-	niconico movie downloader writen by C.
+	niconico movie downloader writen in C.
 
 Usage
  # nicodown [usermail] [password] [video_id]
