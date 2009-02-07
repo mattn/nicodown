@@ -1,4 +1,6 @@
 //#define CURL_STATICLIB
+#include <stdlib.h>
+#include <memory.h>
 #include <curl/curl.h>
 #ifdef USE_LIBXML
 #include <libxml/parser.h>
@@ -77,7 +79,7 @@ main(int argc, char* argv[]) {
 
     // usage
     if (argc != 4) {
-        fputs("usage: nicodown [usermail] [password] [video_id]", stderr);
+        fputs("usage: nicodown [usermail] [password] [video_id]\n", stderr);
         goto leave;
     }
 
@@ -102,7 +104,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, hf);
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        fprintf(stderr, error);
+        fputs(error, stderr);
         memfclose(mf);
         memfclose(hf);
         goto leave;
@@ -135,7 +137,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_POST, 0);
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        fprintf(stderr, error);
+        fputs(error, stderr);
         memfclose(mf);
         memfclose(hf);
         goto leave;
@@ -180,7 +182,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        fprintf(stderr, error);
+        fputs(error, stderr);
         memfclose(mf);
         goto leave;
     }
@@ -261,7 +263,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        fprintf(stderr, error);
+        fputs(error, stderr);
         memfclose(mf);
         goto leave;
     }
@@ -278,9 +280,9 @@ main(int argc, char* argv[]) {
     tmp = ptr;
     while(*tmp) {
         if (IS_QUOTED(tmp)) {
-            char num = 0;
+            unsigned int num = 0;
             sscanf(tmp+1, "%02x", &num);
-            *tmp = num;
+            *tmp = (char)num;
             strcpy(tmp + 1, tmp + 3);
         }
         tmp++;
@@ -315,7 +317,7 @@ main(int argc, char* argv[]) {
     res = curl_easy_perform(curl);
     fclose(fp);
     if (res != CURLE_OK) {
-        fprintf(stderr, error);
+        fputs(error, stderr);
         goto leave;
     }
 
