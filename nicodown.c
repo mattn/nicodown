@@ -66,7 +66,7 @@ main(int argc, char* argv[]) {
     CURL* curl = NULL;
     CURLcode res;
     int status = 0;
-    char error[256];
+    char error[CURL_ERROR_SIZE];
     char fname[256];
     char cookie[256];
     char query[2048];
@@ -88,7 +88,7 @@ main(int argc, char* argv[]) {
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
-    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &error);
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
     //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 
@@ -313,7 +313,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
     curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress);
-    curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, fname);
+    curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, (void*)fname);
     res = curl_easy_perform(curl);
     fclose(fp);
     if (res != CURLE_OK) {
@@ -323,6 +323,7 @@ main(int argc, char* argv[]) {
 
 leave:
     if (curl) curl_easy_cleanup(curl);
+    printf("\n");
 
     return 0;
 }
