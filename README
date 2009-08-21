@@ -4,7 +4,10 @@ What?
 	niconico movie downloader written in C.
 
 Usage
- # nicodown [usermail] [password] [video_id]
+ # cat ~/.nicodownrc
+ usermail:password
+
+ # nicodown [video_id]
 
 Build
 	You can build it with gcc.
