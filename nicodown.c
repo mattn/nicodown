@@ -68,6 +68,7 @@ main(int argc, char* argv[]) {
     int status = 0;
     char error[CURL_ERROR_SIZE];
     char fname[256];
+    char line[256];
     char cookie[256];
     char query[2048];
     char* buf = NULL;
@@ -78,13 +79,37 @@ main(int argc, char* argv[]) {
     MEMFILE* hf; // mem file for header
 
     // usage
-    if (argc != 4) {
-        fputs("usage: nicodown [usermail] [password] [video_id]\n", stderr);
+    if (argc != 2) {
+        fputs("usage: nicodown [video_id]\n", stderr);
         goto leave;
     }
 
+	if (!(ptr = getenv("HOME"))) {
+        fprintf(stderr, "failed to get HOME directory\n");
+		goto leave;
+	}
+
+    sprintf(fname, "%s/.nicodownrc", ptr);
+	fp = fopen(fname, "r");
+	if (!fp || !fgets(line, sizeof(line), fp)) {
+		if (fp) fclose(fp);
+        fprintf(stderr, "failed to read ~/.nicodownrc\n");
+		goto leave;
+	}
+	fclose(fp);
+	tmp = strpbrk(line, "\r\n");
+	if (tmp) *tmp = 0;
+	ptr = strchr(line, ':');
+	if (!ptr) {
+        fprintf(stderr, "failed to parse ~/.nicodownrc\n");
+		goto leave;
+	}
+	*ptr++ = 0;
+
+    sprintf(query, "mail=%s&password=%s&next_url=/watch/%s", line, ptr, argv[1]);
+
     // default filename
-    sprintf(fname, "%s.flv", argv[3]);
+    sprintf(fname, "%s.flv", argv[1]);
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
@@ -93,7 +118,6 @@ main(int argc, char* argv[]) {
     //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 
     // login
-    sprintf(query, "mail=%s&password=%s&next_url=/watch/%s", argv[1], argv[2], argv[3]);
     mf = memfopen();
     hf = memfopen();
     curl_easy_setopt(curl, CURLOPT_URL, "https://secure.nicovideo.jp/secure/login?site=niconico");
@@ -132,7 +156,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, hf);
 
     // redirect
-    sprintf(query, "http://www.nicovideo.jp/watch/%s", argv[3]);
+    sprintf(query, "http://www.nicovideo.jp/watch/%s", argv[1]);
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
     res = curl_easy_perform(curl);
@@ -175,7 +199,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, NULL);
 
     // get video query, and get filename
-    sprintf(query, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", argv[3]);
+    sprintf(query, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", argv[1]);
     mf = memfopen();
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
@@ -256,7 +280,7 @@ main(int argc, char* argv[]) {
 #endif
 
     // get video query
-    sprintf(query, "http://www.nicovideo.jp/api/getflv?v=%s", argv[3]);
+    sprintf(query, "http://www.nicovideo.jp/api/getflv?v=%s", argv[1]);
     mf = memfopen();
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
@@ -292,19 +316,17 @@ main(int argc, char* argv[]) {
     free(buf);
     memfclose(mf);
 
-#ifdef _WIN32
     // sanitize filename
     ptr = fname;
     while (*ptr) {
         if (strchr("\\/|:<>\"?*", *ptr)) *ptr = '_';
         ptr++;
     }
-#endif
 
     // download video
     fp = fopen(fname, "wb");
     if (!fp) {
-        fprintf(stderr, "failed to open file\n");
+        fprintf(stderr, "failed to open file: %s\n", fname);
         goto leave;
     }
     curl_easy_setopt(curl, CURLOPT_URL, query);
