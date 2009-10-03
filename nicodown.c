@@ -11,6 +11,7 @@
 #define HEX_DIGITS "0123456789ABCDEF"
 #define IS_QUOTED(x) (*x == '%' && strchr(HEX_DIGITS, *(x+1)) && strchr(HEX_DIGITS, *(x+2)))
 
+#define WATCH_URL_BASE "http://www.nicovideo.jp/watch/"
 
 typedef struct {
     char* data;     // response data from server
@@ -74,6 +75,7 @@ main(int argc, char* argv[]) {
     char* buf = NULL;
     char* ptr = NULL;
     char* tmp = NULL;
+    char* id;
     FILE* fp = NULL;
     MEMFILE* mf; // mem file
     MEMFILE* hf; // mem file for header
@@ -84,32 +86,36 @@ main(int argc, char* argv[]) {
         goto leave;
     }
 
-	if (!(ptr = getenv("HOME"))) {
+    if (!(ptr = getenv("HOME"))) {
         fprintf(stderr, "failed to get HOME directory\n");
-		goto leave;
-	}
+        goto leave;
+    }
 
     sprintf(fname, "%s/.nicodownrc", ptr);
-	fp = fopen(fname, "r");
-	if (!fp || !fgets(line, sizeof(line), fp)) {
-		if (fp) fclose(fp);
+    fp = fopen(fname, "r");
+    if (!fp || !fgets(line, sizeof(line), fp)) {
+        if (fp) fclose(fp);
         fprintf(stderr, "failed to read ~/.nicodownrc\n");
-		goto leave;
-	}
-	fclose(fp);
-	tmp = strpbrk(line, "\r\n");
-	if (tmp) *tmp = 0;
-	ptr = strchr(line, ':');
-	if (!ptr) {
+        goto leave;
+    }
+    fclose(fp);
+    tmp = strpbrk(line, "\r\n");
+    if (tmp) *tmp = 0;
+    ptr = strchr(line, ':');
+    if (!ptr) {
         fprintf(stderr, "failed to parse ~/.nicodownrc\n");
-		goto leave;
-	}
-	*ptr++ = 0;
+        goto leave;
+    }
+    *ptr++ = 0;
 
-    sprintf(query, "mail=%s&password=%s&next_url=/watch/%s", line, ptr, argv[1]);
+    id = argv[1];
+    if (!strncmp(id, WATCH_URL_BASE, strlen(WATCH_URL_BASE))) {
+        id += strlen(WATCH_URL_BASE);
+    }
+    sprintf(query, "mail=%s&password=%s&next_url=/watch/%s", line, ptr, id);
 
     // default filename
-    sprintf(fname, "%s.flv", argv[1]);
+    sprintf(fname, "%s.flv", id);
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
@@ -156,7 +162,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, hf);
 
     // redirect
-    sprintf(query, "http://www.nicovideo.jp/watch/%s", argv[1]);
+    sprintf(query, "http://www.nicovideo.jp/watch/%s", id);
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
     res = curl_easy_perform(curl);
@@ -199,7 +205,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, NULL);
 
     // get video query, and get filename
-    sprintf(query, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", argv[1]);
+    sprintf(query, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", id);
     mf = memfopen();
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
@@ -230,8 +236,8 @@ main(int argc, char* argv[]) {
                 if (node->type == XML_CDATA_SECTION_NODE)
                     sprintf(fname, "%s.flv", (char*) node->content);
                 else
-                if (node->children)
-                    sprintf(fname, "%s.flv", (char*) node->children->content);
+                    if (node->children)
+                        sprintf(fname, "%s.flv", (char*) node->children->content);
                 break;
             }
         }
@@ -280,7 +286,7 @@ main(int argc, char* argv[]) {
 #endif
 
     // get video query
-    sprintf(query, "http://www.nicovideo.jp/api/getflv?v=%s", argv[1]);
+    sprintf(query, "http://www.nicovideo.jp/api/getflv?v=%s", id);
     mf = memfopen();
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
