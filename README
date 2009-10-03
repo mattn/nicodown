@@ -9,6 +9,10 @@ Usage
 
  # nicodown [video_id]
 
+ or
+
+ # nicodown [video_url]
+
 Build
 	You can build it with gcc.
 
