@@ -342,6 +342,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
     curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress);
     curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, (void*)fname);
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 2048);
     res = curl_easy_perform(curl);
     fclose(fp);
     if (res != CURLE_OK) {
