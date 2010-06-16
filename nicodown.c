@@ -119,6 +119,7 @@ main(int argc, char* argv[]) {
 
     curl = curl_easy_init();
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
     //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -286,7 +287,7 @@ main(int argc, char* argv[]) {
 #endif
 
     // get video query
-    sprintf(query, "http://www.nicovideo.jp/api/getflv?v=%s", id);
+    sprintf(query, "http://flapi.nicovideo.jp/api/getflv?v=%s", id);
     mf = memfopen();
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
@@ -298,6 +299,7 @@ main(int argc, char* argv[]) {
         goto leave;
     }
     buf = memfstrdup(mf);
+	printf("%s\n", buf);
     ptr = strstr(buf, "url=");
     if (!ptr) {
         if (buf) free(buf);
