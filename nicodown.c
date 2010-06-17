@@ -299,7 +299,6 @@ main(int argc, char* argv[]) {
         goto leave;
     }
     buf = memfstrdup(mf);
-	printf("%s\n", buf);
     ptr = strstr(buf, "url=");
     if (!ptr) {
         if (buf) free(buf);
