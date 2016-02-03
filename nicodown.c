@@ -57,7 +57,7 @@ memfstrdup(MEMFILE* mf) {
 
 int
 progress(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow) {
-    printf("\r[%s] %.1f%%   ", (char*) clientp, dlnow * 100.0 / dltotal);
+    printf("\r[%s] %d%%   ", (char*) clientp, 100 * (int) (dlnow / dltotal));
     fflush(stdout);
     return 0;
 }
@@ -87,8 +87,15 @@ main(int argc, char* argv[]) {
     }
 
     if (!(ptr = getenv("HOME"))) {
+#ifdef _WIN32
+        if (!(ptr = getenv("USERPROFILE"))) {
+            fprintf(stderr, "failed to get HOME directory\n");
+            goto leave;
+        }
+#else
         fprintf(stderr, "failed to get HOME directory\n");
         goto leave;
+#endif
     }
 
     sprintf(fname, "%s/.nicodownrc", ptr);
@@ -112,7 +119,7 @@ main(int argc, char* argv[]) {
     if (!strncmp(id, WATCH_URL_BASE, strlen(WATCH_URL_BASE))) {
         id += strlen(WATCH_URL_BASE);
     }
-    sprintf(query, "mail=%s&password=%s&next_url=/watch/%s", line, ptr, id);
+    sprintf(query, "mail_tel=%s&password=%s&next_url=/watch/%s", line, ptr, id);
 
     // default filename
     sprintf(fname, "%s.flv", id);
@@ -145,13 +152,16 @@ main(int argc, char* argv[]) {
     memset(cookie, 0, sizeof(cookie));
     buf = memfstrdup(hf);
     tmp = buf;
-    while (tmp = strstr(tmp, "Set-Cookie: "))
-        ptr = tmp++;
-    if (ptr) {
+    while (tmp = strstr(tmp, "Set-Cookie: ")) {
+        ptr = tmp;
         tmp = strpbrk(ptr, "\r\n;");
         if (tmp) *tmp = 0;
         strcpy(cookie, ptr + 12);
-        curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
+        if (strncmp(cookie, "user_session=user", 17) == 0) {
+            curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
+            break;
+        }
+        tmp++;
     }
     free(buf);
 
