@@ -57,7 +57,10 @@ memfstrdup(MEMFILE* mf) {
 
 int
 progress(void *clientp, double dltotal, double dlnow, double ultotal, double ulnow) {
-    printf("\r[%s] %d%%   ", (char*) clientp, 100 * (int) (dlnow / dltotal));
+    double val;
+    if (dltotal == 0) dltotal = 1.0;
+    val = dlnow / dltotal * 100;
+    printf("\r[%s] %3.0f%%   ", (char*) clientp, val);
     fflush(stdout);
     return 0;
 }
@@ -191,12 +194,10 @@ main(int argc, char* argv[]) {
         ptr = tmp + 12;
         tmp = strpbrk(ptr, "\r\n;");
         if (tmp) *tmp = 0;
-		puts(ptr);
         strcat(cookie, ";");
         strcat(cookie, ptr);
         tmp++;
     }
-	puts(cookie);
     curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
     free(buf);
 
@@ -359,7 +360,8 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
     curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress);
     curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, (void*)fname);
-    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 2048);
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, BUFSIZ);
+    /* curl_easy_setopt(curl, CURLOPT_VERBOSE, 1); */
     res = curl_easy_perform(curl);
     fclose(fp);
     if (res != CURLE_OK) {
