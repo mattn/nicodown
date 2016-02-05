@@ -70,7 +70,7 @@ main(int argc, char* argv[]) {
     char error[CURL_ERROR_SIZE];
     char fname[256];
     char line[256];
-    char cookie[256];
+    char cookie[2048];
     char query[2048];
     char* buf = NULL;
     char* ptr = NULL;
@@ -129,7 +129,6 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
-    //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 
     // login
     mf = memfopen();
@@ -137,9 +136,9 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_URL, "https://secure.nicovideo.jp/secure/login?site=niconico");
     curl_easy_setopt(curl, CURLOPT_POST, 1);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, query);
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, memfwrite);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, hf);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, memfwrite);
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         fputs(error, stderr);
@@ -188,15 +187,17 @@ main(int argc, char* argv[]) {
     buf = memfstrdup(hf);
     ptr = NULL;
     tmp = buf;
-    while (tmp = strstr(tmp, "Set-Cookie: "))
-        ptr = tmp++;
-    if (ptr) {
+    while (tmp = strstr(tmp, "Set-Cookie: ")) {
+        ptr = tmp + 12;
         tmp = strpbrk(ptr, "\r\n;");
         if (tmp) *tmp = 0;
-        strcat(cookie, "; ");
-        strcat(cookie, ptr + 12);
-        curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
+		puts(ptr);
+        strcat(cookie, ";");
+        strcat(cookie, ptr);
+        tmp++;
     }
+	puts(cookie);
+    curl_easy_setopt(curl, CURLOPT_COOKIE, cookie);
     free(buf);
 
     // parse response body
@@ -212,8 +213,11 @@ main(int argc, char* argv[]) {
     memfclose(hf);
     memfclose(mf);
 
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, NULL);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, NULL);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, NULL);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, NULL);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
 
     // get video query, and get filename
     sprintf(query, "http://www.nicovideo.jp/api/getthumbinfo?v=%s", id);
@@ -221,6 +225,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         fputs(error, stderr);
@@ -302,6 +307,7 @@ main(int argc, char* argv[]) {
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, mf);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memfwrite);
     res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
         fputs(error, stderr);
@@ -348,8 +354,8 @@ main(int argc, char* argv[]) {
     }
     curl_easy_setopt(curl, CURLOPT_URL, query);
     curl_easy_setopt(curl, CURLOPT_POST, 0);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
     curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress);
     curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, (void*)fname);
